@@ -1,0 +1,45 @@
+#!/usr/bin/env ruby
+require 'bundler/setup'
+require 'learning_k_means'
+require "optparse"
+require 'tapp'
+
+csv_file = File.expand_path('../dataset/population_composition_ratio.csv', __dir__)
+dataset = LearningKMeans::Repository.load!(csv_file, '都道府県', %w(10代以下 20代 30代 40代 50代 60代 70代 80代以上))
+
+options = {}
+OptionParser.new do |opts|
+  opts.on('-d', 'デバッグ') { |v| options[:debug] = true }
+  opts.on('-c VALUE', 'クラスタ数 (-c 3)') { |v| options[:cluster_size] = v.to_i }
+  opts.on('-t VALUE', '実行回数 (-t 100)') { |v| options[:times] = v.to_i }
+  opts.parse!(ARGV)
+end
+
+cluster_size = options[:cluster_size] || 3
+debug = options[:debug] || false
+times = options[:times] || 1
+
+session = LearningKMeans::Session.new(dataset.values, cluster_size, debug: debug)
+
+centroids = nil
+min_cost = nil
+
+1.upto(times) do |i|
+  cost = session.train
+  if min_cost == nil || cost < min_cost
+    centroids = session.centroids
+    min_cost = cost
+  end
+end
+
+centroids.each_with_index do |centroid, i|
+  puts "centroid #{i}: #{centroid}"
+end
+puts "cost: #{min_cost.to_f}"
+
+[].tap do |o|
+  session.labeled!(dataset, centroids).each_pair do |label, cluster|
+    o[cluster] ||= []
+    o[cluster] << label
+  end
+end.tapp
